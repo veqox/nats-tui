@@ -12,10 +12,10 @@ use nats_tui::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Cli::try_parse()?;
-    let _client = Client::new(args);
+    let args = Cli::parse();
+    let client = Client::new(args).await?;
 
-    render_loop()?;
+    render_loop(client).await?;
 
     Ok(())
 }
