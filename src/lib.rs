@@ -31,6 +31,4 @@ pub struct Cli {
         default_value = "",
     )]
     pub password: String,
-
-
 }
