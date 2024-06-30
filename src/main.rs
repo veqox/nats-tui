@@ -1,3 +1,4 @@
+use std::io::Result;
 use clap::Parser;
 
 use nats_tui::{
@@ -7,14 +8,11 @@ use nats_tui::{
 };
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let args = Cli::parse();
-    let client = Client::new(args).await?;
+    let client = Client::new(args).await.unwrap();
 
     App::new(4.0, 60.0)
         .run(client)
         .await
-        .unwrap();
-
-    Ok(())
 }
