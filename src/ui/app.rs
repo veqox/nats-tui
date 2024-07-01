@@ -1,18 +1,16 @@
+use std::collections::HashMap;
 use std::io::Result;
-use std::collections::HashSet;
 
-use crate::{
-    nats::client::Client,
-    ui::tui::*,
-};
+use crate::{nats::client::Client, ui::tui::*};
 
-use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use ratatui::{
     crossterm::event::KeyCode,
-    layout::{Layout, Constraint, Direction},
-    widgets::{Block, List, Paragraph, Borders},
+    layout::{Constraint, Direction, Layout},
+    widgets::{Block, Borders, List, Paragraph},
 };
+use tokio::sync::mpsc;
+use tokio_util::bytes::Bytes;
+use tokio_util::sync::CancellationToken;
 
 pub struct App {
     tick_rate: f64,
@@ -23,7 +21,7 @@ impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Self {
         Self {
             tick_rate,
-            frame_rate
+            frame_rate,
         }
     }
 
@@ -35,7 +33,6 @@ impl App {
         // TODO: connecting animation
         client.subscribe(String::from(">")).await.unwrap();
 
-        let mut seen = HashSet::new();
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(async move {
@@ -45,12 +42,7 @@ impl App {
                         break;
                     }
                     maybe_msg = client.next_msg() => {
-                            if let Ok(msg) = maybe_msg {
-
-                            if seen.contains(&msg) {
-                                continue;
-                            }
-                            seen.insert(msg.clone());
+                        if let Ok(msg) = maybe_msg {
                             action_tx.send(msg).unwrap();
                         }
                     }
@@ -59,13 +51,13 @@ impl App {
         });
 
         let mut tui = Tui::init(self.tick_rate, self.frame_rate).unwrap();
-        let mut subjects = Vec::new();
+        let mut messages: HashMap<String, Vec<Bytes>> = HashMap::new();
 
         loop {
             if let Some(ev) = tui.next().await {
                 match ev {
                     TuiEvent::Tick => (),
-                    TuiEvent::Render => { 
+                    TuiEvent::Render => {
                         tui.terminal.draw(|frame| {
                             let layout = Layout::default()
                                 .direction(Direction::Horizontal)
@@ -75,15 +67,22 @@ impl App {
                                 ])
                                 .split(frame.size());
 
-                            frame.render_widget(
-                                List::new(subjects.clone())
-                                    .block(Block::new().borders(Borders::ALL)),
-                                layout[0]);
+                            let mut subjects = messages
+                                .iter()
+                                .map(|(k, v)| format!("{}: {}", k, v.len()))
+                                .collect::<Vec<String>>();
+
+                            subjects.sort();
 
                             frame.render_widget(
-                                Paragraph::new("Right")
-                                    .block(Block::new().borders(Borders::ALL)),
-                                layout[1]);
+                                List::new(subjects).block(Block::new().borders(Borders::ALL)),
+                                layout[0],
+                            );
+
+                            frame.render_widget(
+                                Paragraph::new("Right").block(Block::new().borders(Borders::ALL)),
+                                layout[1],
+                            );
                         })?;
                     }
                     TuiEvent::Key(key) => {
@@ -98,7 +97,10 @@ impl App {
             }
 
             while let Ok(msg) = action_rx.try_recv() {
-                subjects.push(msg);
+                messages
+                    .entry(msg.subject.to_string())
+                    .or_default()
+                    .push(msg.payload.clone());
             }
         }
 
