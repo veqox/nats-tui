@@ -3,10 +3,14 @@ use std::io::Result;
 
 use crate::{nats::client::Client, ui::tui::*};
 
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::{
     crossterm::event::KeyCode,
-    layout::{Constraint, Direction, Layout},
-    widgets::{Block, Borders, List, Paragraph},
+    layout::{Alignment, Constraint, Direction, Layout},
+    widgets::{
+        block::{Position, Title},
+        Block, Borders, List, Paragraph,
+    },
 };
 use tokio::sync::mpsc;
 use tokio_util::bytes::Bytes;
@@ -67,15 +71,29 @@ impl App {
                                 ])
                                 .split(frame.size());
 
-                            let mut subjects = messages
+                            let subjects = messages
                                 .iter()
                                 .map(|(k, v)| format!("{}: {}", k, v.len()))
                                 .collect::<Vec<String>>();
 
-                            subjects.sort();
+                            let subject_count = subjects.len();
+                            let title = format!("Subjects ({})", subject_count);
 
                             frame.render_widget(
-                                List::new(subjects).block(Block::new().borders(Borders::ALL)),
+                                List::new(subjects)
+                                    .highlight_style(
+                                        Style::default()
+                                            .fg(Color::Yellow)
+                                            .bg(Color::Black)
+                                            .add_modifier(Modifier::BOLD),
+                                    )
+                                    .block(
+                                        Block::new().borders(Borders::ALL).title(
+                                            Title::from(title)
+                                                .position(Position::Top)
+                                                .alignment(Alignment::Center),
+                                        ),
+                                    ),
                                 layout[0],
                             );
 
