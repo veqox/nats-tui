@@ -3,22 +3,24 @@ use std::io::Result;
 
 use crate::{nats::client::Client, ui::tui::*};
 
-use ratatui::style::{Color, Modifier, Style};
 use ratatui::{
     crossterm::event::KeyCode,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout},
     widgets::{
-        block::{Position, Title},
-        Block, Borders, List, Paragraph,
+        Block, Borders, Paragraph,
     },
 };
 use tokio::sync::mpsc;
 use tokio_util::bytes::Bytes;
 use tokio_util::sync::CancellationToken;
 
+use super::subject_overview::SubjectOverview;
+
 pub struct App {
     tick_rate: f64,
     frame_rate: f64,
+
+    subject_overview_widget: SubjectOverview,
 }
 
 impl App {
@@ -26,6 +28,8 @@ impl App {
         Self {
             tick_rate,
             frame_rate,
+
+            subject_overview_widget: SubjectOverview::new(),
         }
     }
 
@@ -71,31 +75,8 @@ impl App {
                                 ])
                                 .split(frame.size());
 
-                            let subjects = messages
-                                .iter()
-                                .map(|(k, v)| format!("{}: {}", k, v.len()))
-                                .collect::<Vec<String>>();
-
-                            let subject_count = subjects.len();
-                            let title = format!("Subjects ({})", subject_count);
-
-                            frame.render_widget(
-                                List::new(subjects)
-                                    .highlight_style(
-                                        Style::default()
-                                            .fg(Color::Yellow)
-                                            .bg(Color::Black)
-                                            .add_modifier(Modifier::BOLD),
-                                    )
-                                    .block(
-                                        Block::new().borders(Borders::ALL).title(
-                                            Title::from(title)
-                                                .position(Position::Top)
-                                                .alignment(Alignment::Center),
-                                        ),
-                                    ),
-                                layout[0],
-                            );
+                            self.subject_overview_widget
+                                .render(frame, layout[0], &messages);
 
                             frame.render_widget(
                                 Paragraph::new("Right").block(Block::new().borders(Borders::ALL)),
@@ -109,6 +90,8 @@ impl App {
                             tui.exit().unwrap();
                             break;
                         }
+
+                        self.subject_overview_widget.handle_key(key.code);
                     }
                     TuiEvent::Error => (),
                 }
