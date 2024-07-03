@@ -6,21 +6,19 @@ use crate::{nats::client::Client, ui::tui::*};
 use ratatui::{
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout},
-    widgets::{
-        Block, Borders, Paragraph,
-    },
 };
 use tokio::sync::mpsc;
 use tokio_util::bytes::Bytes;
 use tokio_util::sync::CancellationToken;
 
-use super::subject_overview::SubjectOverview;
+use super::{subject_details::SubjectDetails, subject_overview::SubjectOverview};
 
 pub struct App {
     tick_rate: f64,
     frame_rate: f64,
 
     subject_overview_widget: SubjectOverview,
+    subject_details_widget: SubjectDetails,
 }
 
 impl App {
@@ -30,6 +28,7 @@ impl App {
             frame_rate,
 
             subject_overview_widget: SubjectOverview::new(),
+            subject_details_widget: SubjectDetails::new(),
         }
     }
 
@@ -78,10 +77,18 @@ impl App {
                             self.subject_overview_widget
                                 .render(frame, layout[0], &messages);
 
-                            frame.render_widget(
-                                Paragraph::new("Right").block(Block::new().borders(Borders::ALL)),
-                                layout[1],
-                            );
+                            let Some(selected_subject) = self.subject_overview_widget.selected()
+                            else {
+                                return;
+                            };
+
+                            let Some((subject, messages)) = messages.iter().nth(selected_subject)
+                            else {
+                                return;
+                            };
+
+                            self.subject_details_widget
+                                .render(frame, layout[1], subject, messages)
                         })?;
                     }
                     TuiEvent::Key(key) => {
