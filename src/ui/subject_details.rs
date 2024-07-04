@@ -6,6 +6,7 @@ use ratatui::{
     },
     Frame,
 };
+use serde_json::{Value};
 use tokio_util::bytes::Bytes;
 
 #[derive(Debug)]
@@ -29,6 +30,8 @@ impl SubjectDetails {
 
         let title = format!("Payload (Bytes: {})", message.len());
         let message = String::from_utf8_lossy(message);
+        let parsed: Value = serde_json::from_str(&message).unwrap();
+        let message = serde_json::to_string_pretty(&parsed).unwrap();
 
         let widget = Paragraph::new(message).wrap(Wrap { trim: (false) }).block(
             Block::new().borders(Borders::ALL).title(
