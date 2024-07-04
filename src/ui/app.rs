@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::io::Result;
+use std::{collections::HashMap, time::SystemTime};
 
 use crate::{nats::client::Client, ui::tui::*};
 
@@ -16,6 +16,7 @@ use super::{subject_details::SubjectDetails, subject_overview::SubjectOverview};
 pub struct App {
     tick_rate: f64,
     frame_rate: f64,
+    start_time: SystemTime,
 
     subject_overview_widget: SubjectOverview,
     subject_details_widget: SubjectDetails,
@@ -26,6 +27,7 @@ impl App {
         Self {
             tick_rate,
             frame_rate,
+            start_time: SystemTime::now(),
 
             subject_overview_widget: SubjectOverview::new(),
             subject_details_widget: SubjectDetails::new(),
@@ -61,47 +63,50 @@ impl App {
         let mut messages: HashMap<String, Vec<Bytes>> = HashMap::new();
 
         loop {
-            if let Some(ev) = tui.next().await {
-                match ev {
-                    TuiEvent::Tick => (),
-                    TuiEvent::Render => {
-                        tui.terminal.draw(|frame| {
-                            let layout = Layout::default()
-                                .direction(Direction::Horizontal)
-                                .constraints(vec![
-                                    Constraint::Percentage(40),
-                                    Constraint::Percentage(60),
-                                ])
-                                .split(frame.size());
+            match tui.next().await {
+                Some(TuiEvent::Tick) => (),
+                Some(TuiEvent::Render) => {
+                    tui.terminal.draw(|frame| {
+                        let layout = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints(vec![
+                                Constraint::Percentage(40),
+                                Constraint::Percentage(60),
+                            ])
+                            .split(frame.size());
 
-                            self.subject_overview_widget
-                                .render(frame, layout[0], &messages);
+                        self.subject_overview_widget
+                            .render(frame, layout[0], &messages);
 
-                            let Some(selected_subject) = self.subject_overview_widget.selected()
-                            else {
-                                return;
-                            };
+                        let Some(selected_subject) = self.subject_overview_widget.selected() else {
+                            return;
+                        };
 
-                            let Some((subject, messages)) = messages.iter().nth(selected_subject)
-                            else {
-                                return;
-                            };
+                        let Some((subject, messages)) = messages.iter().nth(selected_subject)
+                        else {
+                            return;
+                        };
 
-                            self.subject_details_widget
-                                .render(frame, layout[1], subject, messages)
-                        })?;
-                    }
-                    TuiEvent::Key(key) => {
-                        if key.code == KeyCode::Char('q') {
-                            cancel_token.cancel();
-                            tui.exit().unwrap();
-                            break;
-                        }
-
-                        self.subject_overview_widget.handle_key(key.code);
-                    }
-                    TuiEvent::Error => (),
+                        self.subject_details_widget.render(
+                            frame,
+                            layout[1],
+                            subject,
+                            messages,
+                            SystemTime::now().duration_since(self.start_time).unwrap(),
+                        )
+                    })?;
                 }
+                Some(TuiEvent::Key(key)) => {
+                    if key.code == KeyCode::Char('q') {
+                        cancel_token.cancel();
+                        tui.exit().unwrap();
+                        break;
+                    }
+
+                    self.subject_overview_widget.handle_key(key.code);
+                }
+                Some(TuiEvent::Error) => (),
+                None => (),
             }
 
             while let Ok(msg) = action_rx.try_recv() {

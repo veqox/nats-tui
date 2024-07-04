@@ -1,8 +1,6 @@
 use std::io::stdout;
 
 use futures::{FutureExt, StreamExt};
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio_util::sync::CancellationToken;
 use ratatui::{
     backend::CrosstermBackend,
     crossterm::{
@@ -12,6 +10,8 @@ use ratatui::{
     },
     Terminal,
 };
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]
 pub enum TuiError {
@@ -51,15 +51,17 @@ pub struct Tui {
 }
 
 impl Tui {
-    pub fn init(tick_rate: f64, frame_rate: f64) -> Result<Self, TuiError>  {
-        stdout().execute(EnterAlternateScreen)
+    pub fn init(tick_rate: f64, frame_rate: f64) -> Result<Self, TuiError> {
+        stdout()
+            .execute(EnterAlternateScreen)
             .map_err(|_| TuiError::InitFailed("Failed to enter alternate screen".to_string()))?;
         enable_raw_mode()
             .map_err(|_| TuiError::InitFailed("Failed to enable alternate screen".to_string()))?;
 
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))
             .map_err(|_| TuiError::InitFailed("Failed to init terminal".to_string()))?;
-        terminal.clear()
+        terminal
+            .clear()
             .map_err(|_| TuiError::InitFailed("Failed to clear terminal".to_string()))?;
         let (event_tx, event_rx) = mpsc::unbounded_channel();
 
@@ -100,18 +102,14 @@ impl Tui {
                     }
                     maybe_event = crossterm_event => {
                         match maybe_event {
-                            Some(Ok(evt)) => {
-                                match evt {
-                                    CrosstermEvent::Key(key) => {
-                                        if key.kind == KeyEventKind::Press {
-                                            event_tx.send(TuiEvent::Key(key)).unwrap();
-                                        }
-                                    }
-                                    _ => (),
+                            Some(Ok(CrosstermEvent::Key(key))) => {
+                                if key.kind == KeyEventKind::Press {
+                                    event_tx.send(TuiEvent::Key(key)).unwrap();
                                 }
-                            }
+                            },
                             Some(Err(_)) => event_tx.send(TuiEvent::Error).unwrap(),
                             None => (),
+                            _ => ()
                         }
                     }
                     _ = tick_delay => event_tx.send(TuiEvent::Tick).unwrap(),
@@ -123,9 +121,11 @@ impl Tui {
 
     pub fn exit(&mut self) -> Result<(), TuiError> {
         self.cancellation_token.cancel();
-        self.terminal.flush()
+        self.terminal
+            .flush()
             .map_err(|_| TuiError::ExitFailed("Failed to flush terminal".to_string()))?;
-        stdout().execute(LeaveAlternateScreen)
+        stdout()
+            .execute(LeaveAlternateScreen)
             .map_err(|_| TuiError::ExitFailed("Failed to leave alternate screen".to_string()))?;
         disable_raw_mode()
             .map_err(|_| TuiError::ExitFailed("Failed to disable raw mode".to_string()))
